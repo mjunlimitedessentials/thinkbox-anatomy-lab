@@ -1,13 +1,14 @@
 import * as T from './three.module.js';
 import {systems,facts} from './data.js';
+import {tissueMaterial,sculptedSphere} from './tissue.js';
 export function buildModel(scene){
 const structures=[],meshes=[]; const groups={};for(const k in systems){groups[k]=new T.Group();scene.add(groups[k]);}
-const sphere=new T.SphereGeometry(1,48,32);
+const sphere=new T.SphereGeometry(1,32,24);
 function entry(name,system,region,key,extra={}){const d={id:structures.length,name,system,region,...(facts[key]||{}),...extra,parts:[],hidden:false};structures.push(d);return d;}
-function mat(d,color){return new T.MeshStandardMaterial({color:color||systems[d.system].color,roughness:.42,metalness:.025,transparent:true,opacity:systems[d.system].opacity,side:T.DoubleSide});}
+function mat(d,color){return tissueMaterial(d.system,color||systems[d.system].color,systems[d.system].opacity);}
 function add(d,geom,p,s=[1,1,1],color){const m=new T.Mesh(geom,mat(d,color));m.position.set(...p);m.scale.set(...s);m.userData.structure=d;m.userData.base=p.slice();m.userData.scale=s.slice();d.parts.push(m);meshes.push(m);groups[d.system].add(m);return m;}
-function ell(d,p,s,color){return add(d,sphere,p,s,color);}
-function tube(d,points,r=.04,color){const path=new T.CatmullRomCurve3(points.map(p=>new T.Vector3(...p)));const center=path.getPoint(.5);const shifted=points.map(p=>new T.Vector3(...p).sub(center));const curve=new T.CatmullRomCurve3(shifted);const m=add(d,new T.TubeGeometry(curve,Math.max(24,points.length*10),r,12,false),center.toArray(),[1,1,1],color);m.userData.path=path;return m;}
+function ell(d,p,s,color){return add(d,sculptedSphere(sphere,d.name,p[0]<0?-1:1),p,s,color);}
+function tube(d,points,r=.04,color){const path=new T.CatmullRomCurve3(points.map(p=>new T.Vector3(...p)));const center=path.getPoint(.5);const shifted=points.map(p=>new T.Vector3(...p).sub(center));const curve=new T.CatmullRomCurve3(shifted);const m=add(d,new T.TubeGeometry(curve,Math.max(16,points.length*(r<=.015?4:8)),r,r<=.015?6:10,false),center.toArray(),[1,1,1],color);m.userData.path=path;return m;}
 function bone(d,a,b,r=.085){tube(d,[a,b],r);ell(d,a,[r*1.65,r*1.4,r*1.55]);ell(d,b,[r*1.65,r*1.4,r*1.55]);}
 // Coordinates: +X = patient's left, +Y = superior, +Z = anterior.
 const skin=entry('Skin & external surface','skin','Whole body',null,{function:'External protective covering.',location:'Surface of the body.',relationships:'A translucent schematic body envelope; facial, genital, and skin microanatomy are not detailed.'});
@@ -44,7 +45,7 @@ let calf=entry(side+' gastrocnemius','muscle','Lower limb');ell(calf,[s*.46,1.71
 let glute=entry(side+' gluteus maximus','muscle','Pelvis');ell(glute,[s*.45,4.51,-.35],[.35,.40,.18]);
 }
 const sac=entry('Sacrum','bone','Pelvis');ell(sac,[0,4.55,-.24],[.23,.36,.12]);
-let brain=entry('Brain','central','Brain','brain');for(const s of [-1,1]){ell(brain,[s*.19,8.20,-.015],[.225,.38,.32]);for(let j=0;j<9;j++)tube(brain,[[s*.035,8.01+j*.055,.24],[s*.18,8.02+j*.055,.29],[s*.32,8.03+j*.055,.20]],.014,'#b74d89');}ell(brain,[0,7.91,-.23],[.25,.14,.18]);
+let brain=entry('Brain','central','Brain','brain');for(const s of [-1,1]){ell(brain,[s*.19,8.20,-.015],[.225,.38,.32]);for(let j=0;j<9;j++)tube(brain,[[s*.035,8.01+j*.055,.24],[s*.18,8.02+j*.055,.29],[s*.32,8.03+j*.055,.20]],.014,'#aa7d88');}ell(brain,[0,7.91,-.23],[.25,.14,.18]);
 let cord=entry('Spinal cord','central','Spinal cord','cord');tube(cord,[[0,7.98,-.11],[0,7.51,-.25],[0,6.4,-.33],[0,5.48,-.24]],.048);
 const cauda=entry('Cauda equina','nerve','Spinal cord',null,{relationships:'Lumbar and sacral nerve roots continuing below the conus medullaris.'});for(let i=-3;i<=3;i++)tube(cauda,[[0,5.52,-.23],[i*.019,5.15,-.23],[i*.045,4.65,-.2]],.010);
 for(const s of [-1,1]){let side=s<0?'Right':'Left';let nerves=entry(side+' spinal nerve branches','nerve','Back',null,{relationships:'Selected schematic branches, not a complete root or dermatome map.'});for(let i=0;i<13;i++)tube(nerves,[[0,7.45-i*.20,-.27],[s*.22,7.41-i*.20,-.32],[s*.40,7.33-i*.20,-.30]],.017);
@@ -52,20 +53,20 @@ let sci=entry(side+' sciatic nerve','nerve','Lower limb',null,{location:'Posteri
 let median=entry(side+' median nerve','nerve','Upper limb');tube(median,[[s*.80,6.83,.05],[s*1.23,6.05,.04],[s*1.44,5.44,.06],[s*1.67,4.44,.07]],.023);
 }
 let heart=entry('Heart','heart','Thorax','heart');let hm=ell(heart,[.16,6.37,.22],[.31,.43,.27]);hm.rotation.z=-.28;ell(heart,[-.035,6.64,.14],[.18,.17,.18]);ell(heart,[.23,6.68,.09],[.19,.16,.17]);
-let aorta=entry('Aorta','vessel','Thorax',null,{function:'Carries blood from the left ventricle into the systemic arterial circulation.',ref:'heart'});tube(aorta,[[.10,6.60,.12],[.08,6.94,.07],[.33,7.05,-.06],[.37,6.73,-.14],[.16,5.9,-.16],[.11,4.85,-.16]],.065,'#f22e46');
-let vena=entry('Inferior vena cava','vessel','Abdomen',null,{function:'Returns venous blood from the lower body toward the right atrium.',ref:'heart'});tube(vena,[[-.14,4.85,-.13],[-.16,5.7,-.12],[-.11,6.48,.03]],.070,'#297df5');
-let svc=entry('Superior vena cava','vessel','Thorax',null,{function:'Returns venous blood from the upper body toward the right atrium.',ref:'heart'});tube(svc,[[-.13,7.37,0],[-.20,6.90,.04],[-.11,6.60,.07]],.063,'#297df5');
-for(const s of [-1,1]){let side=s<0?'Right':'Left';let artery=entry(side+' arterial pathways','vessel','Whole body',null,{relationships:'Selected routes only; branching and anastomoses are incomplete.'});tube(artery,[[s*.10,6.95,.08],[s*.28,7.38,.07],[s*.22,7.83,.09]],.035,'#f22e46');tube(artery,[[s*.13,6.96,.06],[s*.98,6.91,.05],[s*1.36,5.8,.05],[s*1.70,4.40,.06]],.03,'#f22e46');tube(artery,[[.1,4.85,-.16],[s*.44,4.35,.12],[s*.41,2.37,.06],[s*.42,.62,.07]],.04,'#f22e46');}
+let aorta=entry('Aorta','vessel','Thorax',null,{function:'Carries blood from the left ventricle into the systemic arterial circulation.',ref:'heart'});tube(aorta,[[.10,6.60,.12],[.08,6.94,.07],[.33,7.05,-.06],[.37,6.73,-.14],[.16,5.9,-.16],[.11,4.85,-.16]],.065,'#b93d48');
+let vena=entry('Inferior vena cava','vessel','Abdomen',null,{function:'Returns venous blood from the lower body toward the right atrium.',ref:'heart'});tube(vena,[[-.14,4.85,-.13],[-.16,5.7,-.12],[-.11,6.48,.03]],.070,'#5278a3');
+let svc=entry('Superior vena cava','vessel','Thorax',null,{function:'Returns venous blood from the upper body toward the right atrium.',ref:'heart'});tube(svc,[[-.13,7.37,0],[-.20,6.90,.04],[-.11,6.60,.07]],.063,'#5278a3');
+for(const s of [-1,1]){let side=s<0?'Right':'Left';let artery=entry(side+' arterial pathways','vessel','Whole body',null,{relationships:'Selected routes only; branching and anastomoses are incomplete.'});tube(artery,[[s*.10,6.95,.08],[s*.28,7.38,.07],[s*.22,7.83,.09]],.035,'#b93d48');tube(artery,[[s*.13,6.96,.06],[s*.98,6.91,.05],[s*1.36,5.8,.05],[s*1.70,4.40,.06]],.03,'#b93d48');tube(artery,[[.1,4.85,-.16],[s*.44,4.35,.12],[s*.41,2.37,.06],[s*.42,.62,.07]],.04,'#b93d48');}
 let trachea=entry('Trachea','respiratory','Head & neck',null,{function:'Conducts air toward the main bronchi.'});tube(trachea,[[0,7.6,.15],[0,6.82,.13]],.075,'#9cbab9');for(let i=0;i<8;i++)ell(trachea,[0,7.53-i*.075,.15],[.088,.018,.084],'#aac9c5');
 for(const s of [-1,1]){let side=s<0?'Right':'Left';let lung=entry(side+' lung','respiratory','Thorax','lung');let lm=ell(lung,[s*.55,6.43,-.015],[s<0?.35:.30,.67,.32]);lm.rotation.z=s*.09;let bron=entry(side+' main bronchus','respiratory','Thorax');tube(bron,[[0,6.89,.13],[s*.23,6.65,.08],[s*.48,6.44,.01]],.050,'#96b8b4');}
 let diaphragm=entry('Diaphragm','respiratory','Thorax',null,{function:'Primary muscle of inspiration.',relationships:'Separates thoracic and abdominal cavities. Modeled as a flattened dome.',innervation:'Phrenic nerves, primarily C3–C5.'});ell(diaphragm,[0,5.83,-.01],[.80,.13,.38],'#b16c76');
 let liver=entry('Liver','digestive','Abdomen','liver');let li=ell(liver,[-.34,5.68,.17],[.51,.27,.29],'#ae4036');li.rotation.z=.10;ell(liver,[.10,5.74,.16],[.35,.15,.21],'#ae4036');
-let gall=entry('Gallbladder','digestive','Abdomen','gallbladder');ell(gall,[-.34,5.45,.23],[.085,.14,.065],'#39b66c');
-let stomach=entry('Stomach','digestive','Abdomen',null,{location:'Left upper abdomen.',function:'Stores and mixes ingested food.',relationships:'Inferior to the diaphragm and anterior to the pancreas.'});ell(stomach,[.36,5.55,.18],[.28,.32,.22],'#f28caa');tube(stomach,[[.30,5.55,.16],[.33,5.27,.12],[.10,5.23,.13]],.10,'#f28caa');
+let gall=entry('Gallbladder','digestive','Abdomen','gallbladder');ell(gall,[-.34,5.45,.23],[.085,.14,.065],'#6b8c60');
+let stomach=entry('Stomach','digestive','Abdomen',null,{location:'Left upper abdomen.',function:'Stores and mixes ingested food.',relationships:'Inferior to the diaphragm and anterior to the pancreas.'});ell(stomach,[.36,5.55,.18],[.28,.32,.22],'#bd7979');tube(stomach,[[.30,5.55,.16],[.33,5.27,.12],[.10,5.23,.13]],.10,'#bd7979');
 let esophagus=entry('Esophagus','digestive','Thorax');tube(esophagus,[[0,7.6,-.025],[0,6.8,-.08],[.025,5.94,-.04],[.25,5.71,.10]],.05,'#c89388');
-let pancreas=entry('Pancreas','digestive','Abdomen','pancreas');ell(pancreas,[.04,5.39,-.10],[.43,.11,.10],'#ffc35c');
-let bowel=entry('Small intestine','digestive','Abdomen',null,{function:'Major site of nutrient absorption.',relationships:'Coils are illustrative; duodenum, jejunum, and ileum are not separated.'});let coils=[];for(let i=0;i<55;i++){let t=i/54;coils.push([Math.sin(t*Math.PI*9)*.36,5.25-t*.68,.10+Math.cos(t*Math.PI*9)*.08]);}tube(bowel,coils,.056,'#f2a57b');
-let colon=entry('Large intestine','digestive','Abdomen',null,{function:'Absorbs water and supports fecal formation.',relationships:'Ascending colon on patient right; descending colon on patient left. Haustra and mesenteries are not modeled.'});tube(colon,[[-.48,4.65,.20],[-.53,5.15,.19],[-.47,5.36,.22],[0,5.27,.30],[.49,5.34,.20],[.50,4.81,.17],[.30,4.54,.09],[.05,4.38,-.05]],.085,'#dc795b');
+let pancreas=entry('Pancreas','digestive','Abdomen','pancreas');ell(pancreas,[.04,5.39,-.10],[.43,.11,.10],'#c7a271');
+let bowel=entry('Small intestine','digestive','Abdomen',null,{function:'Major site of nutrient absorption.',relationships:'Coils are illustrative; duodenum, jejunum, and ileum are not separated.'});let coils=[];for(let i=0;i<55;i++){let t=i/54;coils.push([Math.sin(t*Math.PI*9)*.36,5.25-t*.68,.10+Math.cos(t*Math.PI*9)*.08]);}tube(bowel,coils,.056,'#c99882');
+let colon=entry('Large intestine','digestive','Abdomen',null,{function:'Absorbs water and supports fecal formation.',relationships:'Ascending colon on patient right; descending colon on patient left. Haustra and mesenteries are not modeled.'});tube(colon,[[-.48,4.65,.20],[-.53,5.15,.19],[-.47,5.36,.22],[0,5.27,.30],[.49,5.34,.20],[.50,4.81,.17],[.30,4.54,.09],[.05,4.38,-.05]],.085,'#b98171');
 let appendix=entry('Vermiform appendix','digestive','Abdomen');tube(appendix,[[-.48,4.66,.19],[-.56,4.50,.16],[-.46,4.43,.13]],.025);
 let rectum=entry('Rectum','digestive','Pelvis');tube(rectum,[[.05,4.38,-.05],[0,4.05,-.13]],.07);
 for(const s of [-1,1]){let side=s<0?'Right':'Left';let y=s<0?5.35:5.47;let kidney=entry(side+' kidney','urinary','Abdomen','kidney');let km=ell(kidney,[s*.47,y,-.24],[.17,.28,.14]);km.rotation.z=s*-.18;
@@ -73,7 +74,7 @@ let ureter=entry(side+' ureter','urinary','Abdomen',null,{function:'Conveys urin
 let bladder=entry('Urinary bladder','urinary','Pelvis',null,{function:'Stores urine.',location:'Anterior pelvic cavity.'});ell(bladder,[0,4.32,.23],[.22,.20,.19],'#c2a477');
 let thyroid=entry('Thyroid gland','endocrine','Head & neck','thyroid');for(const s of [-1,1])ell(thyroid,[s*.12,7.36,.205],[.09,.14,.06]);tube(thyroid,[[-.12,7.31,.21],[.12,7.31,.21]],.027);
 let pit=entry('Pituitary gland','endocrine','Brain',null,{location:'Base of the brain.',relationships:'Sella turcica and stalk are not resolved.'});ell(pit,[0,7.97,.09],[.055,.045,.05]);
-let spleen=entry('Spleen','lymph','Abdomen','spleen');ell(spleen,[.66,5.65,-.07],[.13,.24,.12],'#9761d2');
+let spleen=entry('Spleen','lymph','Abdomen','spleen');ell(spleen,[.66,5.65,-.07],[.13,.24,.12],'#795968');
 for(const s of [-1,1]){let side=s<0?'Right':'Left';for(const [region,p]of [['Head & neck',[s*.20,7.56,0]],['Upper limb',[s*.87,6.66,.07]],['Pelvis',[s*.44,4.47,.18]]]){let node=entry(side+' '+(region==='Head & neck'?'cervical':region==='Upper limb'?'axillary':'inguinal')+' lymph nodes','lymph',region,'node');for(let i=0;i<3;i++)ell(node,[p[0]+s*i*.05,p[1]-i*.05,p[2]],[.04,.05,.035]);}}
 let thymus=entry('Thymus','lymph','Thorax',null,{relationships:'Adult remnant illustrated; size changes substantially with age.'});ell(thymus,[0,6.94,.27],[.10,.16,.06]);
 let uterus=entry('Uterus','female','Pelvis',null,{function:'Supports implantation and fetal development.',relationships:'Between bladder and rectum; reproductive geometry requires expert validation.'});ell(uterus,[0,4.43,.035],[.18,.19,.105]);tube(uterus,[[0,4.35,.03],[0,4.08,.08]],.065);
@@ -93,7 +94,7 @@ for(const d of structures.filter(d=>d.system==='muscle')){
         const local=new T.Vector3(rx*u,ry*v,z+.006).applyEuler(m.rotation).add(m.position);
         points.push(local.toArray());
       }
-      tube(d,points,.007,'#a92043');
+      tube(d,points,.007,'#953d44');
     }
   }
 }
@@ -105,7 +106,7 @@ for(const s of [-1,1])for(let i=0;i<10;i++){
     const y=8.20+.38*Math.sin(latitude), ring=Math.cos(latitude);
     points.push([s*.19+.228*ring*Math.cos(angle),y+.014*Math.sin(j*.9+i),-.015+.326*ring*Math.sin(angle)]);
   }
-  tube(brain,points,.012,'#bd568e');
+  tube(brain,points,.012,'#b78c96');
 }
 // Raised surface contours give the heart and lungs more readable depth.
 for(const s of [-1,1])tube(heart,[[.16+s*.08,6.69,.31],[.16+s*.21,6.48,.44],[.16+s*.16,6.22,.41],[.15,6.05,.28]],.014,'#a91c38');
@@ -113,7 +114,7 @@ for(const d of structures.filter(d=>d.name.endsWith(' lung'))){
  const m=d.parts[0], [x,y,z]=m.userData.base, [rx,ry,rz]=m.userData.scale;
  for(const level of [-.22,.15]){
   const pts=[];for(let j=0;j<=12;j++){const u=-.78+j*.13,v=level+u*.16;pts.push([x+rx*u,y+ry*v,z+rz*Math.sqrt(Math.max(0,1-u*u-v*v))+.004]);}
-  tube(d,pts,.012,'#b14788');
+  tube(d,pts,.012,'#a5797e');
  }
 }
 for(const d of structures){const box=new T.Box3();d.parts.forEach(m=>box.expandByObject(m));d.center=box.getCenter(new T.Vector3());}
